@@ -28,6 +28,9 @@ int main(int argc, char *argv[]) {
 	CameraManager cameraManager;
 	engine.rootContext()->setContextProperty("cameraManager", &cameraManager);
 
+	QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+		&cameraManager, &CameraManager::stopAllRequested);
+
 	scanner.startDiscovery();
 
 	const QUrl url(QStringLiteral("qrc:/main.qml")); // или прямой путь к файлу, если без ресурсов

@@ -76,6 +76,7 @@ void VlcVideoItem::play()
 	);
 
 	libvlc_media_t *media = libvlc_media_new_location(m_vlcInstance, m_source.toUtf8().constData());
+	libvlc_media_add_option(media, ":rtsp-tcp");
 	libvlc_media_player_set_media(m_vlcPlayer, media);
 	libvlc_media_release(media);
 
@@ -85,14 +86,15 @@ void VlcVideoItem::play()
 
 void VlcVideoItem::stop()
 {
-	stopVlc();
 	m_source = "";
 	emit sourceChanged();
+	stopVlc();
+	update();
 }
 
 void VlcVideoItem::stopVlc()
 {
-	m_mutex.lock();
+	/*m_mutex.lock();
 	if (m_vlcPlayer) {
 		// Останавливаем воспроизведение (отправляет TEARDOWN камере)
 		libvlc_media_player_stop(m_vlcPlayer);
@@ -101,7 +103,25 @@ void VlcVideoItem::stopVlc()
 	}
 	m_frameReady = false;
 	m_currentImage = QImage();
+	m_mutex.unlock();*/
+
+	libvlc_media_player_t *playerToStop = nullptr;
+
+	m_mutex.lock();
+	if (m_vlcPlayer) {
+		playerToStop = m_vlcPlayer;
+		m_vlcPlayer = nullptr;
+	}
+	m_frameReady = false;
+	m_currentImage = QImage();
 	m_mutex.unlock();
+
+	// Останавливаем плеер строго ПОСЛЕ освобождения m_mutex,
+	// чтобы не заблокировать фоновый поток декодера VLC
+	if (playerToStop) {
+		libvlc_media_player_stop(playerToStop);
+		libvlc_media_player_release(playerToStop);
+	}
 }
 
 // VLC запрашивает буфер для записи нового кадра

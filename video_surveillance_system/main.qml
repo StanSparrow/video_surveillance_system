@@ -92,6 +92,15 @@ Window {
                     }
                 }
             }
+
+            onStopAllRequested: {
+                for (var i = 0; i < videoRepeater.count; ++i) {
+                    var rect = videoRepeater.itemAt(i)
+                    if (rect && rect.mediaPlayer) {
+                        rect.mediaPlayer.stop()
+                    }
+                }
+            }
         }
 
         // 2. ПРАВАЯ ЧАСТЬ: Боковая панель

@@ -8,7 +8,15 @@ CameraManager::CameraManager(QObject *parent) : QObject(parent)
 
 CameraManager::~CameraManager()
 {
-	// Гарантированно удаляем все объекты камер и закрываем их соединения
+	stopAllCameras();
+}
+
+void CameraManager::stopAllCameras()
+{
+	// 1. Сначала мгновенно гасим все активные потоки VLC (отправляем TEARDOWN)
+	//emit stopAllRequested();
+
+	// 2. Затем удаляем ONVIF-объекты камер
 	qDeleteAll(activeCameras);
 	activeCameras.clear();
 }

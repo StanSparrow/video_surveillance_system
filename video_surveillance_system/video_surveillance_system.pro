@@ -51,4 +51,5 @@ DST_PATH = $$shell_path($$DEST_DIR)
 # Команды копирования после сборки
 QMAKE_POST_LINK += copy /Y "$$SRC_LIBVLC" "$$DST_PATH" &&
 QMAKE_POST_LINK += copy /Y "$$SRC_LIBVLCCORE" "$$DST_PATH"
+QMAKE_POST_LINK += $$escape_expand(\n\t) xcopy /E /I /Y "$$shell_path($$VLC_DIR/plugins)" "$$shell_path($$DEST_DIR/plugins)"
 }
