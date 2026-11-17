@@ -94,7 +94,7 @@ void VlcVideoItem::stop()
 
 void VlcVideoItem::stopVlc()
 {
-	/*m_mutex.lock();
+	m_mutex.lock();
 	if (m_vlcPlayer) {
 		// Останавливаем воспроизведение (отправляет TEARDOWN камере)
 		libvlc_media_player_stop(m_vlcPlayer);
@@ -103,9 +103,9 @@ void VlcVideoItem::stopVlc()
 	}
 	m_frameReady = false;
 	m_currentImage = QImage();
-	m_mutex.unlock();*/
+	m_mutex.unlock();
 
-	libvlc_media_player_t *playerToStop = nullptr;
+	/*libvlc_media_player_t *playerToStop = nullptr;
 
 	m_mutex.lock();
 	if (m_vlcPlayer) {
@@ -121,7 +121,7 @@ void VlcVideoItem::stopVlc()
 	if (playerToStop) {
 		libvlc_media_player_stop(playerToStop);
 		libvlc_media_player_release(playerToStop);
-	}
+	}*/
 }
 
 // VLC запрашивает буфер для записи нового кадра
