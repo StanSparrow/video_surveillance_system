@@ -30,6 +30,25 @@ HEADERS += \
     camerascanner.h \
     vlcvideoitem.h
 
+VLC_DIR = E:/libraries/vlc-3.0.24
+
 # Пути к SDK LibVLC
-INCLUDEPATH += "E:/libraries/vlc-3.0.24/sdk/include"
-LIBS += -L"E:/libraries/vlc-3.0.24/sdk/lib" -llibvlc -llibvlccore
+INCLUDEPATH += "$$VLC_DIR/sdk/include"
+LIBS += -L"$$VLC_DIR/sdk/lib" -llibvlc -llibvlccore
+
+win32 {
+CONFIG(debug, debug|release) {
+DEST_DIR = $$OUT_PWD
+} else {
+DEST_DIR = $$OUT_PWD
+}
+
+# Переводим слеши в формат Windows (\)
+SRC_LIBVLC = $$shell_path($$VLC_DIR/libvlc.dll)
+SRC_LIBVLCCORE = $$shell_path($$VLC_DIR/libvlccore.dll)
+DST_PATH = $$shell_path($$DEST_DIR)
+
+# Команды копирования после сборки
+QMAKE_POST_LINK += copy /Y "$$SRC_LIBVLC" "$$DST_PATH" &&
+QMAKE_POST_LINK += copy /Y "$$SRC_LIBVLCCORE" "$$DST_PATH"
+}
