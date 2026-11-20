@@ -13,6 +13,8 @@ public:
 	~CameraManager();
 	Q_INVOKABLE void connectToSelectedCameras(const QStringList &ips);
 	Q_INVOKABLE void stopAllCameras();
+	Q_INVOKABLE void ptzMove(int slotIndex, double panSpeed, double tiltSpeed);
+	Q_INVOKABLE void ptzStop(int slotIndex);
 
 signals:
 	void cameraStatusUpdated(int slotIndex, QString ip, bool connected, QString statusText, QString rtspUrl);

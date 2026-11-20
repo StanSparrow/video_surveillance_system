@@ -8,7 +8,21 @@ CameraManager::CameraManager(QObject *parent) : QObject(parent)
 
 CameraManager::~CameraManager()
 {
-	//stopAllCameras();
+
+}
+
+void CameraManager::ptzMove(int slotIndex, double panSpeed, double tiltSpeed)
+{
+	if (slotIndex >= 0 && slotIndex < activeCameras.size() && activeCameras[slotIndex]) {
+		activeCameras[slotIndex]->movePtz(panSpeed, tiltSpeed);
+	}
+}
+
+void CameraManager::ptzStop(int slotIndex)
+{
+	if (slotIndex >= 0 && slotIndex < activeCameras.size() && activeCameras[slotIndex]) {
+		activeCameras[slotIndex]->stopPtz();
+	}
 }
 
 void CameraManager::stopAllCameras()

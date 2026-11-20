@@ -23,11 +23,22 @@ Camera::Camera(const QString &ip, QObject *parent)
 	: QObject(parent), m_ip(ip)
 	{
 	m_networkManager = new QNetworkAccessManager(this);
+	m_ptzController = new OnvifPtzController(m_networkManager, this);
 }
 
 Camera::Camera(QObject *parent)
 	: QObject(parent), m_networkManager(new QNetworkAccessManager(this))
 {
+}
+
+void Camera::movePtz(double panSpeed, double tiltSpeed)
+{
+	if (m_ptzController) m_ptzController->continuousMove(panSpeed, tiltSpeed);
+}
+
+void Camera::stopPtz()
+{
+	if (m_ptzController) m_ptzController->stop();
 }
 
 void Camera::connectToOnvif()
@@ -76,6 +87,8 @@ void Camera::onProfilesReceived()
 
 		if (!profileToken.isEmpty()) {
 			qDebug() << "[" << m_ip << "] Найден токен профиля:" << profileToken;
+
+			m_ptzController->setTarget(m_ip, 8899, profileToken);
 
 			// ШАГ 2: Запрашиваем GetStreamUri
 			QUrl url(QString("http://%1:8899/onvif/device_service").arg(m_ip)); // проверьте ваш порт (8899/80)

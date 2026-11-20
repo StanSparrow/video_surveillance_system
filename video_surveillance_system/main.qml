@@ -76,35 +76,135 @@ Window {
                         visible: vlcPlayer.source === ""
                     }
 
-                    // Небольшая кнопка поворота в правом верхнем углу камеры
-                    Button {
-                        id: rotateButton
-                        width: 28
-                        height: 28
+                    // Общая панель управления внизу по центру ячейки
+                    Row {
+                        id: controlBar
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.margins: 6
-                        z: 10 // Поверх видеопотока
-                        visible: vlcPlayer.source !== "" // Показывать только когда есть поток (уберите, если нужна всегда)
+                        anchors.bottomMargin: 6
+                        spacing: 4
+                        z: 10
+                        visible: vlcPlayer.source !== ""
 
-                        contentItem: Text {
-                            text: "↻"
-                            color: "white"
-                            font.pixelSize: 16
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        property real ptzSpeed: 0.25 // Невысокая скорость для минимального шага
+
+                        // Кнопка переворота кадра на 90°
+                        Button {
+                            id: rotateButton
+                            width: 28
+                            height: 28
+                            padding: 0
+                            contentItem: Text {
+                                text: "↻"
+                                color: "white"
+                                font.pixelSize: 16
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: rotateButton.pressed ? "#aa000000" : "#66000000"
+                                border.color: "#88ffffff"
+                                border.width: 1
+                            }
+                            onClicked: vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
                         }
 
-                        background: Rectangle {
-                            radius: 4
-                            color: rotateButton.pressed ? "#aa000000" : "#66000000"
-                            border.color: "#88ffffff"
-                            border.width: 1
+                        // ВЛЕВО
+                        Button {
+                            id: btnLeft
+                            width: 28
+                            height: 28
+                            padding: 0
+                            contentItem: Text {
+                                text: "◄"
+                                color: "white"
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: btnLeft.pressed ? "#aa000000" : "#66000000"
+                                border.color: "#88ffffff"
+                                border.width: 1
+                            }
+                            onPressed: cameraManager.ptzMove(index, -controlBar.ptzSpeed, 0.0)
+                            onReleased: cameraManager.ptzStop(index)
+                            onCanceled: cameraManager.ptzStop(index)
                         }
 
-                        onClicked: {
-                            vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
+                        // ВВЕРХ
+                        Button {
+                            id: btnUp
+                            width: 28
+                            height: 28
+                            padding: 0
+                            contentItem: Text {
+                                text: "▲"
+                                color: "white"
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: btnUp.pressed ? "#aa000000" : "#66000000"
+                                border.color: "#88ffffff"
+                                border.width: 1
+                            }
+                            onPressed: cameraManager.ptzMove(index, 0.0, controlBar.ptzSpeed)
+                            onReleased: cameraManager.ptzStop(index)
+                            onCanceled: cameraManager.ptzStop(index)
+                        }
+
+                        // ВНИЗ
+                        Button {
+                            id: btnDown
+                            width: 28
+                            height: 28
+                            padding: 0
+                            contentItem: Text {
+                                text: "▼"
+                                color: "white"
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: btnDown.pressed ? "#aa000000" : "#66000000"
+                                border.color: "#88ffffff"
+                                border.width: 1
+                            }
+                            onPressed: cameraManager.ptzMove(index, 0.0, -controlBar.ptzSpeed)
+                            onReleased: cameraManager.ptzStop(index)
+                            onCanceled: cameraManager.ptzStop(index)
+                        }
+
+                        // ВПРАВО
+                        Button {
+                            id: btnRight
+                            width: 28
+                            height: 28
+                            padding: 0
+                            contentItem: Text {
+                                text: "►"
+                                color: "white"
+                                font.pixelSize: 12
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: btnRight.pressed ? "#aa000000" : "#66000000"
+                                border.color: "#88ffffff"
+                                border.width: 1
+                            }
+                            onPressed: cameraManager.ptzMove(index, controlBar.ptzSpeed, 0.0)
+                            onReleased: cameraManager.ptzStop(index)
+                            onCanceled: cameraManager.ptzStop(index)
                         }
                     }
                 }

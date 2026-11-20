@@ -8,6 +8,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
+#include "onvifptzcontroller.h"
+
 class Camera : public QObject
 {
 	Q_OBJECT
@@ -18,6 +20,8 @@ public:
 
 	// Запуск процесса подключения к камере
 	void connectToOnvif();
+	void movePtz(double panSpeed, double tiltSpeed);
+	void stopPtz();
 
 private slots:
 	void onProfilesReceived();
@@ -30,6 +34,7 @@ private:
 	QString m_ip;
 	QString m_rtspUrl;
 	QNetworkAccessManager *m_networkManager;
+	OnvifPtzController *m_ptzController = nullptr;
 };
 
 #endif // CAMERA_H
