@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QNetworkAccessManager>
+#include <QTimer>
 
 class OnvifPtzController : public QObject
 {
@@ -13,18 +14,21 @@ public:
 
 	void setTarget(const QString &ip, int port, const QString &profileToken);
 
-	// pan (X): от -1.0 (влево) до 1.0 (вправо)
-	// tilt (Y): от -1.0 (вниз) до 1.0 (вверх)
 	void continuousMove(double panSpeed, double tiltSpeed);
 	void stop();
 
 private:
+	void sendMovePayload(double panSpeed, double tiltSpeed);
+	void sendStopCommand();
 	void sendSoapRequest(const QByteArray &xmlPayload);
 
 	QNetworkAccessManager *m_networkManager = nullptr;
 	QString m_ip;
 	int m_port = 8899;
 	QString m_profileToken;
+
+	QTimer *m_minStepTimer = nullptr;
+	bool m_stopPending = false;
 };
 
 #endif // ONVIFPTZCONTROLLER_H

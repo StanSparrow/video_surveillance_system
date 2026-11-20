@@ -7,6 +7,16 @@
 OnvifPtzController::OnvifPtzController(QNetworkAccessManager *networkManager, QObject *parent)
 	: QObject(parent), m_networkManager(networkManager)
 {
+	m_minStepTimer = new QTimer(this);
+	m_minStepTimer->setSingleShot(true);
+	m_minStepTimer->setInterval(100); // Длительность минимального шага (100 мс)
+
+	connect(m_minStepTimer, &QTimer::timeout, this, [this]() {
+		if (m_stopPending) {
+			m_stopPending = false;
+			sendStopCommand();
+		}
+	});
 }
 
 void OnvifPtzController::setTarget(const QString &ip, int port, const QString &profileToken)
@@ -20,6 +30,26 @@ void OnvifPtzController::continuousMove(double panSpeed, double tiltSpeed)
 {
 	if (m_ip.isEmpty() || m_profileToken.isEmpty()) return;
 
+	m_stopPending = false;
+	m_minStepTimer->start();
+
+	sendMovePayload(panSpeed, tiltSpeed);
+}
+
+void OnvifPtzController::stop()
+{
+	if (m_ip.isEmpty() || m_profileToken.isEmpty()) return;
+
+	if (m_minStepTimer->isActive()) {
+		m_stopPending = true;
+		return;
+	}
+
+	sendStopCommand();
+}
+
+void OnvifPtzController::sendMovePayload(double panSpeed, double tiltSpeed)
+{
 	QString xml = QString(
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 		"<soap:Envelope xmlns:soap=\"http://w3.org\" "
@@ -31,6 +61,7 @@ void OnvifPtzController::continuousMove(double panSpeed, double tiltSpeed)
 					"<tptz:Velocity>"
 						"<tt:PanTilt x=\"%2\" y=\"%3\"/>"
 					"</tptz:Velocity>"
+					"<tptz:Timeout>PT1S</tptz:Timeout>"
 				"</tptz:ContinuousMove>"
 			"</soap:Body>"
 		"</soap:Envelope>"
@@ -41,11 +72,13 @@ void OnvifPtzController::continuousMove(double panSpeed, double tiltSpeed)
 	sendSoapRequest(xml.toUtf8());
 }
 
-void OnvifPtzController::stop()
+void OnvifPtzController::sendStopCommand()
 {
-	if (m_ip.isEmpty() || m_profileToken.isEmpty()) return;
+	// 1. Остановка через нулевую скорость (работает на камерах XMEye / iCSee)
+	sendMovePayload(0.0, 0.0);
 
-	QString xml = QString(
+	// 2. Классический ONVIF Stop (для совместимости с другими брендами)
+	QString stopXml = QString(
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 		"<soap:Envelope xmlns:soap=\"http://w3.org\" "
 					   "xmlns:tptz=\"http://onvif.org\">"
@@ -59,14 +92,13 @@ void OnvifPtzController::stop()
 		"</soap:Envelope>"
 	).arg(m_profileToken);
 
-	sendSoapRequest(xml.toUtf8());
+	sendSoapRequest(stopXml.toUtf8());
 }
 
 void OnvifPtzController::sendSoapRequest(const QByteArray &xmlPayload)
 {
 	if (!m_networkManager) return;
 
-	// Камеры на порту 8899 принимают PTZ-запросы по тому же пути /onvif/device_service
 	QUrl url(QString("http://%1:%2/onvif/device_service").arg(m_ip).arg(m_port));
 	QNetworkRequest request(url);
 	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/soap+xml; charset=utf-8");
