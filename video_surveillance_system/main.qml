@@ -14,6 +14,7 @@ Window {
 
     onClosing: {
         console.log("Закрытие приложения. Освобождаем камеры...")
+        cameraManager.stopAllCameras()
         cameraManager.connectToSelectedCameras([]) // Передаем пустой список, чтобы сработал qDeleteAll
     }
 

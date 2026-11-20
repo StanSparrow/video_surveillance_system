@@ -20,8 +20,6 @@ void VlcVideoItem::initVlc()
 {
 	const char* vlc_args[] = {
 		"--network-caching=300", // Увеличим буфер до 300мс для стабильности 2K/H.265 потока
-		"--rtsp-tcp",            // Принудительно поверх TCP, чтобы пакеты не терялись
-		"--no-audio",
 		"--skip-frames"
 	};
 	m_vlcInstance = libvlc_new(sizeof(vlc_args) / sizeof(vlc_args[0]), vlc_args);
@@ -76,11 +74,13 @@ void VlcVideoItem::play()
 	);
 
 	libvlc_media_t *media = libvlc_media_new_location(m_vlcInstance, m_source.toUtf8().constData());
-	libvlc_media_add_option(media, ":rtsp-tcp");
+	//libvlc_media_add_option(media, ":rtsp-tcp");
+	//libvlc_media_add_option(media, ":avcodec-hw=none");
 	libvlc_media_player_set_media(m_vlcPlayer, media);
 	libvlc_media_release(media);
 
 	libvlc_media_player_play(m_vlcPlayer);
+	//libvlc_audio_set_mute(m_vlcPlayer, 1);
 }
 
 
@@ -94,18 +94,7 @@ void VlcVideoItem::stop()
 
 void VlcVideoItem::stopVlc()
 {
-	m_mutex.lock();
-	if (m_vlcPlayer) {
-		// Останавливаем воспроизведение (отправляет TEARDOWN камере)
-		libvlc_media_player_stop(m_vlcPlayer);
-		libvlc_media_player_release(m_vlcPlayer);
-		m_vlcPlayer = nullptr;
-	}
-	m_frameReady = false;
-	m_currentImage = QImage();
-	m_mutex.unlock();
-
-	/*libvlc_media_player_t *playerToStop = nullptr;
+	libvlc_media_player_t *playerToStop = nullptr;
 
 	m_mutex.lock();
 	if (m_vlcPlayer) {
@@ -116,12 +105,12 @@ void VlcVideoItem::stopVlc()
 	m_currentImage = QImage();
 	m_mutex.unlock();
 
-	// Останавливаем плеер строго ПОСЛЕ освобождения m_mutex,
-	// чтобы не заблокировать фоновый поток декодера VLC
+	// Останавливаем плеер ПОСЛЕ освобождения m_mutex,
+	// чтобы поток декодера VLC мог корректно завершить работу и отправить TEARDOWN
 	if (playerToStop) {
 		libvlc_media_player_stop(playerToStop);
 		libvlc_media_player_release(playerToStop);
-	}*/
+	}
 }
 
 // VLC запрашивает буфер для записи нового кадра
@@ -138,7 +127,7 @@ void* VlcVideoItem::lockCallback(void *opaque, void **planes)
 
 void VlcVideoItem::unlockCallback(void *opaque, void *picture, void *const *planes)
 {
-	VlcVideoItem *item = static_cast<VlcVideoItem*>(opaque);
+	/*VlcVideoItem *item = static_cast<VlcVideoItem*>(opaque);
 	Q_UNUSED(picture);
 	Q_UNUSED(planes);
 
@@ -149,6 +138,22 @@ void VlcVideoItem::unlockCallback(void *opaque, void *picture, void *const *plan
 		item->m_videoHeight,
 		QImage::Format_RGBA8888
 	);
+
+	item->m_frameReady = true;
+	item->m_mutex.unlock();*/
+
+	VlcVideoItem *item = static_cast<VlcVideoItem*>(opaque);
+	Q_UNUSED(picture);
+	Q_UNUSED(planes);
+
+	// Делаем .copy(), чтобы QImage владел своей памятью и не зависел
+	// от перезаписи или resize() буфера m_pixelBuffer в следующем кадре
+	item->m_currentImage = QImage(
+		reinterpret_cast<const uchar*>(item->m_pixelBuffer.constData()),
+		item->m_videoWidth,
+		item->m_videoHeight,
+		QImage::Format_RGBA8888
+	).copy();
 
 	item->m_frameReady = true;
 	item->m_mutex.unlock();
