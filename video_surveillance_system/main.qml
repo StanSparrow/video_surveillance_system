@@ -130,7 +130,7 @@ Window {
                                 border.color: "#88ffffff"
                                 border.width: 1
                             }
-                            onPressed: cameraManager.ptzMove(index, -controlBar.ptzSpeed, 0.0)
+                            onPressed: cameraManager.ptzMove(index, controlBar.ptzSpeed, 0.0)
                             onReleased: cameraManager.ptzStop(index)
                             onCanceled: cameraManager.ptzStop(index)
                         }
@@ -202,7 +202,7 @@ Window {
                                 border.color: "#88ffffff"
                                 border.width: 1
                             }
-                            onPressed: cameraManager.ptzMove(index, controlBar.ptzSpeed, 0.0)
+                            onPressed: cameraManager.ptzMove(index, -controlBar.ptzSpeed, 0.0)
                             onReleased: cameraManager.ptzStop(index)
                             onCanceled: cameraManager.ptzStop(index)
                         }
@@ -270,17 +270,20 @@ Window {
                     model: cameraScanner.devices
 
                     delegate: CheckDelegate {
-                        width: parent.width
-                        // Показываем IP-адрес камеры
+                        width: cameraListView.width
+                        topPadding: 0
+                        bottomPadding: 0
+                        leftPadding: 4
+                        rightPadding: 4
+                        spacing: 4
                         text: "Камера IP: " + modelData
                         font.italic: true
-                        font.pixelSize: 15
+                        font.pixelSize: 14
 
                         contentItem: Text {
                             text: parent.text
                             font: parent.font
                             verticalAlignment: Text.AlignVCenter
-                            leftPadding: 10
                         }
 
                         //onClicked: cameraListView.currentIndex = index
