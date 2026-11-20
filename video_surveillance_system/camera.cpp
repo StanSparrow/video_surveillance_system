@@ -89,6 +89,7 @@ void Camera::onProfilesReceived()
 			qDebug() << "[" << m_ip << "] Найден токен профиля:" << profileToken;
 
 			m_ptzController->setTarget(m_ip, 8899, profileToken);
+			m_ptzController->restoreSavedPosition();
 
 			// ШАГ 2: Запрашиваем GetStreamUri
 			QUrl url(QString("http://%1:8899/onvif/device_service").arg(m_ip)); // проверьте ваш порт (8899/80)

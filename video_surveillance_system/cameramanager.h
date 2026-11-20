@@ -15,6 +15,8 @@ public:
 	Q_INVOKABLE void stopAllCameras();
 	Q_INVOKABLE void ptzMove(int slotIndex, double panSpeed, double tiltSpeed);
 	Q_INVOKABLE void ptzStop(int slotIndex);
+	Q_INVOKABLE void saveUiAngle(const QString &ip, int angle);
+	Q_INVOKABLE int loadUiAngle(const QString &ip) const;
 
 signals:
 	void cameraStatusUpdated(int slotIndex, QString ip, bool connected, QString statusText, QString rtspUrl);

@@ -1,4 +1,5 @@
 #include "cameramanager.h"
+#include "settingsmanager.h"
 #include "camera.h"
 
 CameraManager::CameraManager(QObject *parent) : QObject(parent)
@@ -57,5 +58,20 @@ void CameraManager::connectToSelectedCameras(const QStringList &ips) {
 
 		cam->connectToOnvif();
 	}
+}
+
+void CameraManager::saveUiAngle(const QString &ip, int angle)
+{
+	if (ip.isEmpty()) return;
+	QJsonObject updates;
+	updates["uiAngle"] = angle;
+	SettingsManager::updateCameraSettings(ip, updates);
+}
+
+int CameraManager::loadUiAngle(const QString &ip) const
+{
+	if (ip.isEmpty()) return 0;
+	QJsonObject camSettings = SettingsManager::getCameraSettings(ip);
+	return camSettings.value("uiAngle").toInt(0);
 }
 

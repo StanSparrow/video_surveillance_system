@@ -16,11 +16,15 @@ public:
 
 	void continuousMove(double panSpeed, double tiltSpeed);
 	void stop();
+	void restoreSavedPosition();
 
 private:
 	void sendMovePayload(double panSpeed, double tiltSpeed);
 	void sendStopCommand();
-	void sendSoapRequest(const QByteArray &xmlPayload);
+	void sendSoapRequest(const QByteArray &xmlPayload, std::function<void(const QByteArray&, bool)> callback = nullptr);
+	void saveCurrentPosition();
+	void absoluteMove(double pan, double tilt);
+	void gotoPreset(const QString &presetToken);
 
 	QNetworkAccessManager *m_networkManager = nullptr;
 	QString m_ip;
@@ -28,6 +32,7 @@ private:
 	QString m_profileToken;
 
 	QTimer *m_minStepTimer = nullptr;
+	QTimer *m_saveDelayTimer = nullptr;
 	bool m_stopPending = false;
 };
 

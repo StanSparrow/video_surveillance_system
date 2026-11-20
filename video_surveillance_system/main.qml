@@ -49,6 +49,7 @@ Window {
                     border.width: 2
                     clip: true // Обрезаем всё, что выходит за рамки слота
 
+                    property string currentIp: ""
                     property alias statusTextLabel: statusTextLabel
                     property alias mediaPlayer: vlcPlayer
 
@@ -108,7 +109,10 @@ Window {
                                 border.color: "#88ffffff"
                                 border.width: 1
                             }
-                            onClicked: vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
+                            onClicked: {
+                                vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
+                                cameraManager.saveUiAngle(cameraCell.currentIp, vlcPlayer.angle)
+                            }
                         }
 
                         // ВЛЕВО
@@ -219,9 +223,11 @@ Window {
                 var rect = videoRepeater.itemAt(slotIndex)
                 if (rect) {
                     rect.color = connected ? "#e2f0d9" : "#fce4d6"
+                    rect.currentIp = ip
 
                     if (connected && rtspUrl !== "") {
                         rect.statusTextLabel.text = "ЗАГРУЗКА ПОТОКА...\n" + ip
+                        rect.mediaPlayer.angle = cameraManager.loadUiAngle(ip)
                         // Явно останавливаем, меняем URL и запускаем плеер
                         rect.mediaPlayer.stop()
                         rect.mediaPlayer.source = rtspUrl

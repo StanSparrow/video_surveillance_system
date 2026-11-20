@@ -15,6 +15,7 @@ SOURCES += \
     camerascanner.cpp \
     main.cpp \
     onvifptzcontroller.cpp \
+    settingsmanager.cpp \
     vlcvideoitem.cpp
 
 # Default rules for deployment.
@@ -30,6 +31,7 @@ HEADERS += \
     cameramanager.h \
     camerascanner.h \
     onvifptzcontroller.h \
+    settingsmanager.h \
     vlcvideoitem.h
 
 VLC_DIR = E:/libraries/vlc-3.0.24
