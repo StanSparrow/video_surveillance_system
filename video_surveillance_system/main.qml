@@ -40,19 +40,28 @@ Window {
                 model: 4
 
                 Rectangle {
+                    id: cameraCell
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: "#f5f5f5"
                     border.color: "black"
                     border.width: 2
+                    clip: true // Обрезаем всё, что выходит за рамки слота
 
                     property alias statusTextLabel: statusTextLabel
-                    property alias mediaPlayer: vlcPlayer // Псевдоним сохраняем для совместимости с вашим Connections
+                    property alias mediaPlayer: vlcPlayer
 
-                    // Наш кастомный LibVLC плеер вместо старого медиаплеера
                     VlcVideoPlayer {
                         id: vlcPlayer
-                        anchors.fill: parent
+                        anchors.centerIn: parent
+
+                        // Угол поворота (0, 90, 180, 270)
+                        property int angle: 0
+                        rotation: angle
+
+                        // При повороте на 90° и 270° меняем ширину и высоту местами
+                        width: (angle % 180 === 0) ? parent.width : parent.height
+                        height: (angle % 180 === 0) ? parent.height : parent.width
                     }
 
                     Text {
@@ -63,8 +72,39 @@ Window {
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         color: "black"
-                        // Скрываем текст, когда идет видео, чтобы он не перекрывал картинку
                         visible: vlcPlayer.source === ""
+                    }
+
+                    // Небольшая кнопка поворота в правом верхнем углу камеры
+                    Button {
+                        id: rotateButton
+                        width: 28
+                        height: 28
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.margins: 6
+                        z: 10 // Поверх видеопотока
+                        visible: vlcPlayer.source !== "" // Показывать только когда есть поток (уберите, если нужна всегда)
+
+                        contentItem: Text {
+                            text: "↻"
+                            color: "white"
+                            font.pixelSize: 16
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        background: Rectangle {
+                            radius: 4
+                            color: rotateButton.pressed ? "#aa000000" : "#66000000"
+                            border.color: "#88ffffff"
+                            border.width: 1
+                        }
+
+                        onClicked: {
+                            vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
+                        }
                     }
                 }
             }
