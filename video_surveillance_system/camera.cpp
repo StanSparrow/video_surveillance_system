@@ -210,7 +210,7 @@ static QByteArray extractRawVideoFrames(QByteArray &buf)
 
 void Camera::fetchRecordings(const QString &dateStr)
 {
-	// 1. Запускаем локальный мост для проигрывания выбранного файла в LibVLC (один раз на камеру)
+		// 1. Запускаем локальный мост для проигрывания выбранного файла в LibVLC (один раз на камеру)
 	if (!m_replayServer) {
 		m_replayServer = new QTcpServer(this);
 		m_replayServer->listen(QHostAddress::LocalHost, 0);
@@ -231,14 +231,16 @@ void Camera::fetchRecordings(const QString &dateStr)
 				QString startTime = parts.value(1);
 				QString endTime = parts.value(2);
 
-				vlcSock->write("HTTP/1.1 200 OK\r\nContent-Type: video/h264\r\nConnection: close\r\n\r\n");
+				qDebug() << "[" << m_ip << "] Запрос воспроизведения файла:" << fileName << startTime << "->" << endTime;
 
-				// Открываем отдельный поток воспроизведения к камере (порт 34567)
 				QTcpSocket *camSock = new QTcpSocket(vlcSock);
 				auto rxBuf = std::make_shared<QByteArray>();
 				auto mediaBuf = std::make_shared<QByteArray>();
 				auto sid = std::make_shared<uint32_t>(0);
+				auto sidStr = std::make_shared<QString>();
 				auto step = std::make_shared<int>(0);
+				auto headerSent = std::make_shared<bool>(false);
+				auto totalBytesSent = std::make_shared<qint64>(0);
 
 				connect(camSock, &QTcpSocket::connected, this, [this, camSock]() {
 					QJsonObject loginJson{
@@ -250,7 +252,7 @@ void Camera::fetchRecordings(const QString &dateStr)
 					camSock->write(buildDvripPacket(1000, 0, 0, loginJson));
 				});
 
-				connect(camSock, &QTcpSocket::readyRead, this, [camSock, vlcSock, rxBuf, mediaBuf, sid, step, fileName, startTime, endTime]() {
+				connect(camSock, &QTcpSocket::readyRead, this, [this, camSock, vlcSock, rxBuf, mediaBuf, sid, sidStr, step, headerSent, totalBytesSent, fileName, startTime, endTime]() {
 					rxBuf->append(camSock->readAll());
 					while (rxBuf->size() >= 20) {
 						uint32_t pktSid = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 4));
@@ -261,10 +263,13 @@ void Camera::fetchRecordings(const QString &dateStr)
 						QByteArray payload = rxBuf->mid(20, len);
 						rxBuf->remove(0, 20 + len);
 
-						if (msgId == 1001 && *step == 0) { // Login OK -> Claim + Start
-							*sid = pktSid;
-							*step = 1;
-							QString sidStr = QString("0x%1").arg(*sid, 8, 16, QChar('0'));
+						if (msgId != 1422) {
+							int lastBrace = payload.lastIndexOf('}');
+							if (lastBrace >= 0) payload = payload.left(lastBrace + 1);
+							qDebug() << "[" << m_ip << "] Replay msgId:" << msgId << payload;
+						}
+
+						auto makePlaybackObj = [&](const QString &action) {
 							QJsonObject param{
 								{"FileName", fileName},
 								{"PlayMode", "ByName"},
@@ -272,25 +277,60 @@ void Camera::fetchRecordings(const QString &dateStr)
 								{"TransMode", "TCP"},
 								{"Value", 0}
 							};
-							QJsonObject claim{
+							return QJsonObject{
 								{"Name", "OPPlayBack"},
-								{"SessionID", sidStr},
-								{"OPPlayBack", QJsonObject{{"Action", "Claim"}, {"StartTime", startTime}, {"EndTime", endTime}, {"Parameter", param}}}
+								{"SessionID", *sidStr},
+								{"OPPlayBack", QJsonObject{
+									{"Action", action},
+									{"StartTime", startTime},
+									{"EndTime", endTime},
+									{"Parameter", param}
+								}}
 							};
-							QJsonObject start = claim;
-							QJsonObject pb = start["OPPlayBack"].toObject();
-							pb["Action"] = "Start";
-							start["OPPlayBack"] = pb;
+						};
 
-							camSock->write(buildDvripPacket(1424, *sid, 1, claim));
-							camSock->write(buildDvripPacket(1420, *sid, 2, start));
-						} else if (msgId == 1422) { // PLAY_DATA
+						if (msgId == 1001 && *step == 0) { // Шаг 1: Login OK -> отправляем Claim (1424)
+							QJsonObject resp = QJsonDocument::fromJson(payload).object();
+							if (resp.value("Ret").toInt(-1) != 100) {
+								vlcSock->disconnectFromHost();
+								return;
+							}
+							*sid = pktSid;
+							*sidStr = resp.value("SessionID").toString();
+							if (sidStr->isEmpty()) {
+								*sidStr = QString("0x%1").arg(*sid, 8, 16, QChar('0'));
+							}
+							*step = 1;
+							camSock->write(buildDvripPacket(1424, *sid, 1, makePlaybackObj("Claim")));
+
+						} else if (msgId == 1425 && *step == 1) { // Шаг 2: Claim OK -> отправляем Start (1420)
+							QJsonObject resp = QJsonDocument::fromJson(payload).object();
+							if (resp.value("Ret").toInt(-1) != 100) {
+								vlcSock->disconnectFromHost();
+								return;
+							}
+							*step = 2;
+							camSock->write(buildDvripPacket(1420, *sid, 2, makePlaybackObj("Start")));
+
+						} else if (msgId == 1422) { // Шаг 3: Поток кадров PLAY_DATA
 							mediaBuf->append(payload);
 							QByteArray rawVideo = extractRawVideoFrames(*mediaBuf);
 							if (!rawVideo.isEmpty() && vlcSock->state() == QAbstractSocket::ConnectedState) {
+								if (!*headerSent) {
+									*headerSent = true;
+									// Определяем кодек по NAL-заголовку первого кадра (0x40/0x42 = HEVC/H.265)
+									bool isHevc = rawVideo.contains(QByteArray::fromHex("0000000140")) ||
+												  rawVideo.contains(QByteArray::fromHex("00000140"));
+									QByteArray mime = isHevc ? "video/hevc" : "video/h264";
+									qDebug() << "[" << m_ip << "] Определён кодек архива:" << mime << "первые байты:" << rawVideo.left(16).toHex();
+
+									vlcSock->write("HTTP/1.1 200 OK\r\nContent-Type: " + mime + "\r\nConnection: close\r\n\r\n");
+								}
 								vlcSock->write(rawVideo);
+								*totalBytesSent += rawVideo.size();
 							}
 						} else if (msgId == 1423) { // PLAY_EOF
+							qDebug() << "[" << m_ip << "] Конец файла архива (PLAY_EOF), всего передано:" << *totalBytesSent;
 							vlcSock->disconnectFromHost();
 						}
 					}
