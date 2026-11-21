@@ -262,7 +262,7 @@ Window {
                 // Из C++ приходят: slotIndex, ip, connected, statusText, rtspUrl
                 var rect = videoRepeater.itemAt(slotIndex)
                 if (rect) {
-                    rect.color = connected ? "#e2f0d9" : "#fce4d6"
+                    rect.color = connected ? "#1a1a1a" : "#fce4d6"
                     rect.currentIp = ip
 
                     if (connected && rtspUrl !== "") {

@@ -178,7 +178,6 @@ QSGNode* VlcVideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 			node = new QSGSimpleTextureNode();
 		}
 
-		// Создаем текстуру. Теперь QImage имеет правильный размер (2304x1296)
 		QSGTexture *texture = window()->createTextureFromImage(m_currentImage);
 
 		if (node->texture()) {
@@ -188,11 +187,22 @@ QSGNode* VlcVideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 		node->setTexture(texture);
 		m_frameReady = false;
 	}
+	int vidW = m_videoWidth;
+	int vidH = m_videoHeight;
 	m_mutex.unlock();
 
 	if (node) {
-		node->setRect(boundingRect());
+		QRectF bounds = boundingRect();
+		if (vidW > 0 && vidH > 0) {
+			QSizeF scaledSize = QSizeF(vidW, vidH).scaled(bounds.size(), Qt::KeepAspectRatio);
+			qreal x = bounds.x() + (bounds.width() - scaledSize.width()) / 2.0;
+			qreal y = bounds.y() + (bounds.height() - scaledSize.height()) / 2.0;
+			node->setRect(QRectF(x, y, scaledSize.width(), scaledSize.height()));
+		} else {
+			node->setRect(bounds);
+		}
 	}
 	return node;
 }
+
 
