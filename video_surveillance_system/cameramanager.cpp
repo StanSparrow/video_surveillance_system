@@ -56,6 +56,10 @@ void CameraManager::connectToSelectedCameras(const QStringList &ips) {
 			}
 		});
 
+		connect(cam, &Camera::recordingsReceived, this, [this, i](QVariantList list) {
+			emit recordingsReady(i, list);
+		});
+
 		cam->connectToOnvif();
 	}
 }
@@ -73,5 +77,12 @@ int CameraManager::loadUiAngle(const QString &ip) const
 	if (ip.isEmpty()) return 0;
 	QJsonObject camSettings = SettingsManager::getCameraSettings(ip);
 	return camSettings.value("uiAngle").toInt(0);
+}
+
+void CameraManager::requestRecordings(int slotIndex, const QString &dateStr)
+{
+	if (slotIndex >= 0 && slotIndex < activeCameras.size() && activeCameras[slotIndex]) {
+		activeCameras[slotIndex]->fetchRecordings(dateStr);
+	}
 }
 

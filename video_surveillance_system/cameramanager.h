@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QVector>
+#include <QVariantList>
 
 class Camera;
 class CameraManager : public QObject
@@ -17,10 +18,12 @@ public:
 	Q_INVOKABLE void ptzStop(int slotIndex);
 	Q_INVOKABLE void saveUiAngle(const QString &ip, int angle);
 	Q_INVOKABLE int loadUiAngle(const QString &ip) const;
+	Q_INVOKABLE void requestRecordings(int slotIndex, const QString &dateStr);
 
 signals:
 	void cameraStatusUpdated(int slotIndex, QString ip, bool connected, QString statusText, QString rtspUrl);
 	void stopAllRequested();
+	void recordingsReady(int slotIndex, QVariantList recordings);
 
 private:
 	QVector<Camera*> activeCameras;

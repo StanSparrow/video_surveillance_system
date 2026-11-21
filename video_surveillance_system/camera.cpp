@@ -2,6 +2,7 @@
 #include <QNetworkRequest>
 #include <QXmlStreamReader>
 #include <QDebug>
+#include <QVariantMap>
 
 const QByteArray STREAM_URI_PAYLOAD =
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -138,4 +139,88 @@ void Camera::onProfilesReceived()
 	}
 
 	reply->deleteLater();
+}
+
+void Camera::fetchRecordings(const QString &dateStr)
+{
+	QUrl url(QString("http://%1:8899/onvif/device_service").arg(m_ip));
+	QNetworkRequest request(url);
+	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/soap+xml; charset=utf-8");
+
+	// 1. Запрашиваем список доступных треков/записей (GetRecordings)
+	QByteArray soap =
+		"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+		"<soap:Envelope xmlns:soap=\"http://w3.org\" "
+					   "xmlns:trc=\"http://onvif.org\">"
+			"<soap:Body><trc:GetRecordings/></soap:Body>"
+		"</soap:Envelope>";
+
+	QNetworkReply *reply = m_networkManager->post(request, soap);
+	connect(reply, &QNetworkReply::finished, this, [this, reply, dateStr, url]() {
+		QString recordingToken;
+		if (reply->error() == QNetworkReply::NoError) {
+			QXmlStreamReader xml(reply->readAll());
+			while (!xml.atEnd() && !xml.hasError()) {
+				xml.readNext();
+				if (xml.isStartElement() && xml.name() == "RecordingToken") {
+					recordingToken = xml.readElementText();
+					break;
+				}
+			}
+		}
+		reply->deleteLater();
+
+		if (recordingToken.isEmpty()) {
+			qDebug() << "[" << m_ip << "] Камера не вернула RecordingToken (ONVIF Profile G не поддерживается)";
+			emit recordingsReceived(QVariantList());
+			return;
+		}
+
+		// 2. Запрашиваем RTSP-ссылку воспроизведения (GetReplayUri)
+		QByteArray replaySoap = QString(
+			"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+			"<soap:Envelope xmlns:soap=\"http://w3.org\" "
+						   "xmlns:trp=\"http://onvif.org\" "
+						   "xmlns:tt=\"http://onvif.org\">"
+				"<soap:Body>"
+					"<trp:GetReplayUri>"
+						"<trp:StreamSetup>"
+							"<trp:Stream>RTP-Unicast</trp:Stream>"
+							"<trp:Transport><trp:Protocol>RTSP</trp:Protocol></trp:Transport>"
+						"</trp:StreamSetup>"
+						"<trp:RecordingToken>%1</trp:RecordingToken>"
+					"</trp:GetReplayUri>"
+				"</soap:Body>"
+			"</soap:Envelope>"
+		).arg(recordingToken).toUtf8();
+
+		QNetworkRequest reqReplay(url);
+		reqReplay.setHeader(QNetworkRequest::ContentTypeHeader, "application/soap+xml; charset=utf-8");
+		QNetworkReply *repReply = m_networkManager->post(reqReplay, replaySoap);
+
+		connect(repReply, &QNetworkReply::finished, this, [this, repReply, dateStr]() {
+			QVariantList result;
+			if (repReply->error() == QNetworkReply::NoError) {
+				QXmlStreamReader xml(repReply->readAll());
+				while (!xml.atEnd() && !xml.hasError()) {
+					xml.readNext();
+					if (xml.isStartElement() && xml.name() == "Uri") {
+						QString baseReplayUrl = xml.readElementText();
+						// Формируем интервалы за выбранную дату (например, по часам)
+						for (int h = 0; h < 24; ++h) {
+							QString start = QString("%1T%2:00:00Z").arg(dateStr).arg(h, 2, 10, QChar('0'));
+							QString end   = QString("%1T%2:59:59Z").arg(dateStr).arg(h, 2, 10, QChar('0'));
+							QVariantMap item;
+							item["title"] = QString("%1:00 - %1:59").arg(h, 2, 10, QChar('0'));
+							item["replayUrl"] = QString("%1?starttime=%2&endtime=%3").arg(baseReplayUrl, start, end);
+							result.append(item);
+						}
+						break;
+					}
+				}
+			}
+			repReply->deleteLater();
+			emit recordingsReceived(result);
+		});
+	});
 }
