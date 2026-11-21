@@ -271,9 +271,12 @@ Window {
                                 onClicked: {
                                     archiveWindow.slotIndex = index
                                     archiveWindow.cameraIp = cameraCell.currentIp
+                                    archiveWindow.recordingsModel = []
+                                    userInput.text = cameraManager.loadCameraUser(cameraCell.currentIp)
+                                    passInput.text = cameraManager.loadCameraPassword(cameraCell.currentIp)
                                     archiveWindow.show()
                                     archiveWindow.raise()
-                                    cameraManager.requestRecordings(index, archiveWindow.selectedDate)
+                                    cameraManager.requestRecordings(index, archiveWindow.selectedDate, userInput.text, passInput.text)
                                 }
                             }
                         }
@@ -472,6 +475,21 @@ Window {
                 Layout.fillHeight: true
                 spacing: 8
 
+                TextField {
+                    id: userInput
+                    Layout.fillWidth: true
+                    placeholderText: "Имя пользователя (из приложения)"
+                    text: cameraManager.loadCameraUser(archiveWindow.cameraIp)
+                }
+
+                TextField {
+                    id: passInput
+                    Layout.fillWidth: true
+                    echoMode: TextInput.Password
+                    placeholderText: "Пароль устройства"
+                    text: cameraManager.loadCameraPassword(archiveWindow.cameraIp)
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     TextField {
@@ -484,7 +502,7 @@ Window {
                         text: "Найти"
                         onClicked: {
                             archiveWindow.selectedDate = dateInput.text
-                            cameraManager.requestRecordings(archiveWindow.slotIndex, archiveWindow.selectedDate)
+                            cameraManager.requestRecordings(archiveWindow.slotIndex, archiveWindow.selectedDate, userInput.text, passInput.text)
                         }
                     }
                 }

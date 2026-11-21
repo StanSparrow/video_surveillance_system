@@ -79,10 +79,24 @@ int CameraManager::loadUiAngle(const QString &ip) const
 	return camSettings.value("uiAngle").toInt(0);
 }
 
-void CameraManager::requestRecordings(int slotIndex, const QString &dateStr)
+QString CameraManager::loadCameraPassword(const QString &ip) const
+{
+	if (ip.isEmpty()) return QString();
+	return SettingsManager::getCameraSettings(ip).value("password").toString();
+}
+
+QString CameraManager::loadCameraUser(const QString &ip) const
+{
+	if (ip.isEmpty()) return "admin";
+	return SettingsManager::getCameraSettings(ip).value("user").toString("admin");
+}
+
+void CameraManager::requestRecordings(int slotIndex, const QString &dateStr, const QString &user, const QString &password)
 {
 	if (slotIndex >= 0 && slotIndex < activeCameras.size() && activeCameras[slotIndex]) {
+		activeCameras[slotIndex]->setCredentials(user.isEmpty() ? "admin" : user, password);
 		activeCameras[slotIndex]->fetchRecordings(dateStr);
 	}
 }
+
 

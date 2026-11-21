@@ -18,7 +18,9 @@ public:
 	Q_INVOKABLE void ptzStop(int slotIndex);
 	Q_INVOKABLE void saveUiAngle(const QString &ip, int angle);
 	Q_INVOKABLE int loadUiAngle(const QString &ip) const;
-	Q_INVOKABLE void requestRecordings(int slotIndex, const QString &dateStr);
+	Q_INVOKABLE void requestRecordings(int slotIndex, const QString &dateStr, const QString &user = QString(), const QString &password = QString());
+	Q_INVOKABLE QString loadCameraUser(const QString &ip) const;
+	Q_INVOKABLE QString loadCameraPassword(const QString &ip) const;
 
 signals:
 	void cameraStatusUpdated(int slotIndex, QString ip, bool connected, QString statusText, QString rtspUrl);

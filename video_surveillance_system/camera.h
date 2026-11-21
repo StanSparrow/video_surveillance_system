@@ -8,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QVariantList>
+#include <QTcpServer>
 
 #include "onvifptzcontroller.h"
 
@@ -24,6 +25,7 @@ public:
 	void movePtz(double panSpeed, double tiltSpeed);
 	void stopPtz();
 	void fetchRecordings(const QString &dateStr);
+	void setCredentials(const QString &user, const QString &password);
 
 private slots:
 	void onProfilesReceived();
@@ -39,6 +41,11 @@ private:
 	QNetworkAccessManager *m_networkManager;
 	OnvifPtzController *m_ptzController = nullptr;
 	QString m_profileToken;
+	QTcpServer *m_replayServer = nullptr;
+	QString m_dvripUser = "admin";
+	QString m_dvripPass = "";
+	QString m_dvripAuthPass = "";
+	QString m_dvripAuthEnc = "MD5";
 };
 
 #endif // CAMERA_H

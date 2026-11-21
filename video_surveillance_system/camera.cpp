@@ -1,8 +1,16 @@
+#include "settingsmanager.h"
 #include "camera.h"
 #include <QNetworkRequest>
 #include <QXmlStreamReader>
 #include <QDebug>
 #include <QVariantMap>
+#include <QTcpSocket>
+#include <QCryptographicHash>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QtEndian>
+#include <memory>
 
 const QByteArray STREAM_URI_PAYLOAD =
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -141,86 +149,305 @@ void Camera::onProfilesReceived()
 	reply->deleteLater();
 }
 
+// Хеш пароля по стандарту XiongMai / Sofia (8 символов из MD5)
+static QString sofiaPasswordHash(const QString &password)
+{
+	QByteArray md5 = QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Md5);
+	const char chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+	QString result;
+	for (int i = 0; i < 8; ++i) {
+		int sum = static_cast<unsigned char>(md5[2 * i]) + static_cast<unsigned char>(md5[2 * i + 1]);
+		result.append(chars[sum % 62]);
+	}
+	return result;
+}
+
+static QByteArray buildDvripPacket(uint16_t msgId, uint32_t sessionId, uint32_t seq, const QJsonObject &json)
+{
+	QByteArray payload = QJsonDocument(json).toJson(QJsonDocument::Compact) + "\n";
+	QByteArray packet(20, '\0');
+	uchar *hdr = reinterpret_cast<uchar*>(packet.data());
+	*hdr = 0xFF;
+	*(hdr + 1) = 0x00;
+	qToLittleEndian<uint32_t>(sessionId, hdr + 4);
+	qToLittleEndian<uint32_t>(seq, hdr + 8);
+	qToLittleEndian<uint16_t>(msgId, hdr + 14);
+	qToLittleEndian<uint32_t>(static_cast<uint32_t>(payload.size()), hdr + 16);
+	return packet + payload;
+}
+
+// Вырезаем служебные заголовки кадров Sofia (00 00 01 FC/FD/FA), оставляя чистый H.264/H.265
+static QByteArray extractRawVideoFrames(QByteArray &buf)
+{
+	QByteArray out;
+	while (buf.size() >= 8) {
+		int idx = buf.indexOf(QByteArray::fromHex("000001"));
+		if (idx < 0) {
+			buf.clear();
+			break;
+		}
+		if (idx > 0) buf.remove(0, idx);
+		if (buf.size() < 8) break;
+
+		uint8_t type = static_cast<uint8_t>(buf.at(3));
+		int headerLen = (type == 0xFC) ? 16 : 8; // 0xFC = I-frame (16B), 0xFD = P-frame (8B), 0xFA = Audio (8B)
+		if (buf.size() < headerLen) break;
+
+		uint32_t frameLen = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(buf.constData() + headerLen - 4));
+		if (frameLen > 10 * 1024 * 1024) { // защита от рассинхрона
+			buf.remove(0, 3);
+			continue;
+		}
+		if (buf.size() < headerLen + static_cast<int>(frameLen)) break;
+
+		if (type == 0xFC || type == 0xFD || type == 0xFE) {
+			out.append(buf.constData() + headerLen, frameLen);
+		}
+		buf.remove(0, headerLen + frameLen);
+	}
+	return out;
+}
+
 void Camera::fetchRecordings(const QString &dateStr)
 {
-	QUrl url(QString("http://%1:8899/onvif/device_service").arg(m_ip));
-	QNetworkRequest request(url);
-	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/soap+xml; charset=utf-8");
+	// 1. Запускаем локальный мост для проигрывания выбранного файла в LibVLC (один раз на камеру)
+	if (!m_replayServer) {
+		m_replayServer = new QTcpServer(this);
+		m_replayServer->listen(QHostAddress::LocalHost, 0);
 
-	// 1. Запрашиваем список доступных треков/записей (GetRecordings)
-	QByteArray soap =
-		"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-		"<soap:Envelope xmlns:soap=\"http://w3.org\" "
-					   "xmlns:trc=\"http://onvif.org\">"
-			"<soap:Body><trc:GetRecordings/></soap:Body>"
-		"</soap:Envelope>";
+		connect(m_replayServer, &QTcpServer::newConnection, this, [this]() {
+			QTcpSocket *vlcSock = m_replayServer->nextPendingConnection();
+			connect(vlcSock, &QTcpSocket::readyRead, this, [this, vlcSock]() {
+				QByteArray httpReq = vlcSock->readAll();
+				int getIdx = httpReq.indexOf("GET /?file=");
+				if (getIdx < 0) return;
 
-	QNetworkReply *reply = m_networkManager->post(request, soap);
-	connect(reply, &QNetworkReply::finished, this, [this, reply, dateStr, url]() {
-		QString recordingToken;
-		if (reply->error() == QNetworkReply::NoError) {
-			QXmlStreamReader xml(reply->readAll());
-			while (!xml.atEnd() && !xml.hasError()) {
-				xml.readNext();
-				if (xml.isStartElement() && xml.name() == "RecordingToken") {
-					recordingToken = xml.readElementText();
-					break;
-				}
-			}
-		}
-		reply->deleteLater();
+				int endIdx = httpReq.indexOf(' ', getIdx + 11);
+				QByteArray encoded = httpReq.mid(getIdx + 11, endIdx - (getIdx + 11));
+				QStringList parts = QString::fromUtf8(QByteArray::fromPercentEncoding(encoded)).split('|');
+				if (parts.size() < 3) return;
 
-		if (recordingToken.isEmpty()) {
-			qDebug() << "[" << m_ip << "] Камера не вернула RecordingToken (ONVIF Profile G не поддерживается)";
+				QString fileName = parts.value(0);
+				QString startTime = parts.value(1);
+				QString endTime = parts.value(2);
+
+				vlcSock->write("HTTP/1.1 200 OK\r\nContent-Type: video/h264\r\nConnection: close\r\n\r\n");
+
+				// Открываем отдельный поток воспроизведения к камере (порт 34567)
+				QTcpSocket *camSock = new QTcpSocket(vlcSock);
+				auto rxBuf = std::make_shared<QByteArray>();
+				auto mediaBuf = std::make_shared<QByteArray>();
+				auto sid = std::make_shared<uint32_t>(0);
+				auto step = std::make_shared<int>(0);
+
+				connect(camSock, &QTcpSocket::connected, this, [this, camSock]() {
+					QJsonObject loginJson{
+						{"EncryptType", m_dvripAuthEnc},
+						{"LoginType", "DVRIP-Web"},
+						{"UserName", m_dvripUser},
+						{"PassWord", m_dvripAuthPass}
+					};
+					camSock->write(buildDvripPacket(1000, 0, 0, loginJson));
+				});
+
+				connect(camSock, &QTcpSocket::readyRead, this, [camSock, vlcSock, rxBuf, mediaBuf, sid, step, fileName, startTime, endTime]() {
+					rxBuf->append(camSock->readAll());
+					while (rxBuf->size() >= 20) {
+						uint32_t pktSid = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 4));
+						uint16_t msgId = qFromLittleEndian<uint16_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 14));
+						uint32_t len = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 16));
+						if (rxBuf->size() < 20 + static_cast<int>(len)) break;
+
+						QByteArray payload = rxBuf->mid(20, len);
+						rxBuf->remove(0, 20 + len);
+
+						if (msgId == 1001 && *step == 0) { // Login OK -> Claim + Start
+							*sid = pktSid;
+							*step = 1;
+							QString sidStr = QString("0x%1").arg(*sid, 8, 16, QChar('0'));
+							QJsonObject param{
+								{"FileName", fileName},
+								{"PlayMode", "ByName"},
+								{"StreamType", 0},
+								{"TransMode", "TCP"},
+								{"Value", 0}
+							};
+							QJsonObject claim{
+								{"Name", "OPPlayBack"},
+								{"SessionID", sidStr},
+								{"OPPlayBack", QJsonObject{{"Action", "Claim"}, {"StartTime", startTime}, {"EndTime", endTime}, {"Parameter", param}}}
+							};
+							QJsonObject start = claim;
+							QJsonObject pb = start["OPPlayBack"].toObject();
+							pb["Action"] = "Start";
+							start["OPPlayBack"] = pb;
+
+							camSock->write(buildDvripPacket(1424, *sid, 1, claim));
+							camSock->write(buildDvripPacket(1420, *sid, 2, start));
+						} else if (msgId == 1422) { // PLAY_DATA
+							mediaBuf->append(payload);
+							QByteArray rawVideo = extractRawVideoFrames(*mediaBuf);
+							if (!rawVideo.isEmpty() && vlcSock->state() == QAbstractSocket::ConnectedState) {
+								vlcSock->write(rawVideo);
+							}
+						} else if (msgId == 1423) { // PLAY_EOF
+							vlcSock->disconnectFromHost();
+						}
+					}
+				});
+
+				connect(vlcSock, &QTcpSocket::disconnected, camSock, &QTcpSocket::deleteLater);
+				connect(vlcSock, &QTcpSocket::disconnected, vlcSock, &QTcpSocket::deleteLater);
+				camSock->connectToHost(m_ip, 34567);
+			});
+		});
+	}
+
+	// 2. Перебор вариантов входа и запрос списка записей на флешке за дату dateStr
+	struct AuthAttempt { QString user; QString pass; QString enc; };
+	auto attempts = std::make_shared<QList<AuthAttempt>>(QList<AuthAttempt>{
+		{m_dvripUser, sofiaPasswordHash(m_dvripPass), "MD5"},
+		{m_dvripUser, m_dvripPass, "NONE"},
+		{"admin", sofiaPasswordHash(m_dvripPass), "MD5"},
+		{"admin", m_dvripPass, "NONE"}
+	});
+	auto attemptIdx = std::make_shared<int>(0);
+	auto tryNextLogin = std::make_shared<std::function<void()>>();
+
+	*tryNextLogin = [this, attempts, attemptIdx, tryNextLogin, dateStr]() {
+		if (*attemptIdx >= attempts->size()) {
+			qDebug() << "[" << m_ip << "] Ни один из 4 способов входа на порт 34567 не подошёл";
 			emit recordingsReceived(QVariantList());
 			return;
 		}
 
-		// 2. Запрашиваем RTSP-ссылку воспроизведения (GetReplayUri)
-		QByteArray replaySoap = QString(
-			"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-			"<soap:Envelope xmlns:soap=\"http://w3.org\" "
-						   "xmlns:trp=\"http://onvif.org\" "
-						   "xmlns:tt=\"http://onvif.org\">"
-				"<soap:Body>"
-					"<trp:GetReplayUri>"
-						"<trp:StreamSetup>"
-							"<trp:Stream>RTP-Unicast</trp:Stream>"
-							"<trp:Transport><trp:Protocol>RTSP</trp:Protocol></trp:Transport>"
-						"</trp:StreamSetup>"
-						"<trp:RecordingToken>%1</trp:RecordingToken>"
-					"</trp:GetReplayUri>"
-				"</soap:Body>"
-			"</soap:Envelope>"
-		).arg(recordingToken).toUtf8();
+		AuthAttempt cur = attempts->at(*attemptIdx);
+		(*attemptIdx)++;
+		qDebug() << "[" << m_ip << "] Старт попытки" << *attemptIdx << cur.user << cur.enc;
 
-		QNetworkRequest reqReplay(url);
-		reqReplay.setHeader(QNetworkRequest::ContentTypeHeader, "application/soap+xml; charset=utf-8");
-		QNetworkReply *repReply = m_networkManager->post(reqReplay, replaySoap);
+		QTcpSocket *querySock = new QTcpSocket(this);
+		auto rxBuf = std::make_shared<QByteArray>();
+		auto loggedIn = std::make_shared<bool>(false);
 
-		connect(repReply, &QNetworkReply::finished, this, [this, repReply, dateStr]() {
-			QVariantList result;
-			if (repReply->error() == QNetworkReply::NoError) {
-				QXmlStreamReader xml(repReply->readAll());
-				while (!xml.atEnd() && !xml.hasError()) {
-					xml.readNext();
-					if (xml.isStartElement() && xml.name() == "Uri") {
-						QString baseReplayUrl = xml.readElementText();
-						// Формируем интервалы за выбранную дату (например, по часам)
-						for (int h = 0; h < 24; ++h) {
-							QString start = QString("%1T%2:00:00Z").arg(dateStr).arg(h, 2, 10, QChar('0'));
-							QString end   = QString("%1T%2:59:59Z").arg(dateStr).arg(h, 2, 10, QChar('0'));
-							QVariantMap item;
-							item["title"] = QString("%1:00 - %1:59").arg(h, 2, 10, QChar('0'));
-							item["replayUrl"] = QString("%1?starttime=%2&endtime=%3").arg(baseReplayUrl, start, end);
-							result.append(item);
-						}
-						break;
+		connect(querySock, &QTcpSocket::connected, this, [querySock, cur]() {
+			QJsonObject loginJson{
+				{"EncryptType", cur.enc},
+				{"LoginType", "DVRIP-Web"},
+				{"UserName", cur.user},
+				{"PassWord", cur.pass}
+			};
+			querySock->write(buildDvripPacket(1000, 0, 0, loginJson));
+		});
+
+		connect(querySock, &QTcpSocket::readyRead, this, [this, querySock, rxBuf, loggedIn, dateStr, cur, tryNextLogin]() {
+			rxBuf->append(querySock->readAll());
+			while (rxBuf->size() >= 20) {
+				uint32_t sid = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 4));
+				uint16_t msgId = qFromLittleEndian<uint16_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 14));
+				uint32_t len = qFromLittleEndian<uint32_t>(reinterpret_cast<const uchar*>(rxBuf->constData() + 16));
+				if (rxBuf->size() < 20 + static_cast<int>(len)) break;
+
+				QByteArray payload = rxBuf->mid(20, len);
+				rxBuf->remove(0, 20 + len);
+
+				int lastBrace = payload.lastIndexOf('}');
+				if (lastBrace >= 0) {
+					payload = payload.left(lastBrace + 1);
+				}
+
+				if (msgId == 1001 && !*loggedIn) {
+					QJsonObject resp = QJsonDocument::fromJson(payload).object();
+					int ret = resp.value("Ret").toInt(-1);
+					qDebug() << "[" << m_ip << "] Попытка" << cur.user << cur.enc << "-> Ret:" << ret;
+
+					if (ret != 100) {
+						querySock->abort();
+						querySock->deleteLater();
+						(*tryNextLogin)();
+						return;
 					}
+
+					m_dvripUser = cur.user;
+					m_dvripAuthPass = cur.pass;
+					m_dvripAuthEnc = cur.enc;
+
+					*loggedIn = true;
+					QString sidStr = resp.value("SessionID").toString();
+					if (sidStr.isEmpty()) {
+						sidStr = QString("0x%1").arg(sid, 8, 16, QChar('0'));
+					}
+
+					QJsonObject queryJson{
+						{"Name", "OPFileQuery"},
+						{"SessionID", sidStr},
+						{"OPFileQuery", QJsonObject{
+							{"BeginTime", dateStr + " 00:00:00"},
+							{"EndTime", dateStr + " 23:59:59"},
+							{"Channel", 0},
+							{"DriverTypeMask", "0x0000FFFF"},
+							{"Event", "*"},
+							{"StreamType", "0x00000000"},
+							{"Type", "h264"}
+						}}
+					};
+					querySock->write(buildDvripPacket(1440, sid, 1, queryJson));
+				} else if (msgId == 1441) {
+					qDebug() << "[" << m_ip << "] Ответ OPFileQuery (1441):" << payload;
+					QJsonObject root = QJsonDocument::fromJson(payload).object();
+					QJsonArray files = root.value("OPFileQuery").toArray();
+					QVariantList result;
+					quint16 localPort = m_replayServer->serverPort();
+
+					for (const QJsonValue &val : files) {
+						QJsonObject f = val.toObject();
+						QString begin = f.value("BeginTime").toString();
+						QString end = f.value("EndTime").toString();
+						QString fileName = f.value("FileName").toString();
+
+						QString rawParam = QString("%1|%2|%3").arg(fileName, begin, end);
+						QString url = QString("http://127.0.0.1:%1/?file=%2")
+										  .arg(localPort)
+										  .arg(QString::fromUtf8(rawParam.toUtf8().toPercentEncoding()));
+
+						QVariantMap item;
+						item["title"] = begin.mid(11) + " - " + end.mid(11);
+						item["replayUrl"] = url;
+						result.append(item);
+					}
+
+					qDebug() << "[" << m_ip << "] Найдено файлов на SD-карте:" << result.size();
+					emit recordingsReceived(result);
+					querySock->disconnectFromHost();
+					querySock->deleteLater();
+					return;
 				}
 			}
-			repReply->deleteLater();
-			emit recordingsReceived(result);
 		});
-	});
+
+		connect(querySock, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error), this, [this, querySock, loggedIn, tryNextLogin](QAbstractSocket::SocketError) {
+			qDebug() << "[" << m_ip << "] Ошибка сокета 34567:" << querySock->errorString();
+			querySock->deleteLater();
+			if (!*loggedIn) {
+				(*tryNextLogin)();
+			}
+		});
+
+		querySock->connectToHost(m_ip, 34567);
+	};
+
+	(*tryNextLogin)();
 }
+
+void Camera::setCredentials(const QString &user, const QString &password)
+{
+	m_dvripUser = user;
+	m_dvripPass = password;
+
+	if (!m_ip.isEmpty()) {
+		QJsonObject updates;
+		updates["user"] = user;
+		updates["password"] = password;
+		SettingsManager::updateCameraSettings(m_ip, updates);
+	}
+}
+
