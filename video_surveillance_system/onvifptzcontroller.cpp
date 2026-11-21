@@ -204,7 +204,7 @@ void OnvifPtzController::restoreSavedPosition()
 	qDebug() << "[" << m_ip << "] Калибровка по концевикам перед возвратом в пресет:" << presetToken;
 
 	// Гоним камеру в крайний нижний-левый упор, чтобы сбросить счётчик шагов даже после поворота рукой
-	sendMovePayload(-1.0, -1.0);
+	//sendMovePayload(-1.0, -1.0);
 
 	// Через 4 секунды останавливаем и отправляем в сохранённый пресет
 	QTimer::singleShot(4000, this, [this, presetToken]() {
