@@ -12,6 +12,8 @@ Window {
     visible: true
     title: "Система видеонаблюдения"
 
+    property int expandedSlot: -1
+
     onClosing: {
         console.log("Закрытие приложения. Освобождаем камеры...")
         cameraManager.stopAllCameras()
@@ -33,8 +35,8 @@ Window {
             Layout.fillHeight: true
             columns: 2
             rows: 2
-            columnSpacing: 8
-            rowSpacing: 8
+            columnSpacing: root.expandedSlot === -1 ? 8 : 0
+            rowSpacing: root.expandedSlot === -1 ? 8 : 0
 
             Repeater {
                 id: videoRepeater
@@ -48,6 +50,9 @@ Window {
                     border.color: "black"
                     border.width: 2
                     clip: true // Обрезаем всё, что выходит за рамки слота
+                    visible: root.expandedSlot === -1 || root.expandedSlot === index
+                    Layout.columnSpan: root.expandedSlot === index ? 2 : 1
+                    Layout.rowSpan: root.expandedSlot === index ? 2 : 1
 
                     property string currentIp: ""
                     property alias statusTextLabel: statusTextLabel
@@ -77,138 +82,173 @@ Window {
                         visible: vlcPlayer.source === ""
                     }
 
-                    // Общая панель управления внизу по центру ячейки
-                    Row {
-                        id: controlBar
+                    Flickable {
+                        id: controlFlickable
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottomMargin: 6
-                        spacing: 4
                         z: 10
                         visible: vlcPlayer.source !== ""
 
-                        property real ptzSpeed: 0.25 // Невысокая скорость для минимального шага
+                        width: Math.min(controlBar.width, parent.width - 12)
+                        height: controlBar.height
+                        contentWidth: controlBar.width
+                        contentHeight: controlBar.height
 
-                        // Кнопка переворота кадра на 90°
-                        Button {
-                            id: rotateButton
-                            width: 28
-                            height: 28
-                            padding: 0
-                            contentItem: Text {
-                                text: "↻"
-                                color: "white"
-                                font.pixelSize: 16
-                                font.bold: true
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: rotateButton.pressed ? "#aa000000" : "#66000000"
-                                border.color: "#88ffffff"
-                                border.width: 1
-                            }
-                            onClicked: {
-                                vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
-                                cameraManager.saveUiAngle(cameraCell.currentIp, vlcPlayer.angle)
-                            }
-                        }
+                        flickableDirection: Flickable.HorizontalFlick
+                        boundsBehavior: Flickable.StopAtBounds
+                        interactive: contentWidth > width
+                        clip: true
 
-                        // ВЛЕВО
-                        Button {
-                            id: btnLeft
-                            width: 28
-                            height: 28
-                            padding: 0
-                            contentItem: Text {
-                                text: "◄"
-                                color: "white"
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: btnLeft.pressed ? "#aa000000" : "#66000000"
-                                border.color: "#88ffffff"
-                                border.width: 1
-                            }
-                            onPressed: cameraManager.ptzMove(index, controlBar.ptzSpeed, 0.0)
-                            onReleased: cameraManager.ptzStop(index)
-                            onCanceled: cameraManager.ptzStop(index)
-                        }
+                        // Общая панель управления внизу по центру ячейки
+                        Row {
+                            id: controlBar
+                            spacing: 4
+                            property real ptzSpeed: 0.25 // Невысокая скорость для минимального шага
 
-                        // ВВЕРХ
-                        Button {
-                            id: btnUp
-                            width: 28
-                            height: 28
-                            padding: 0
-                            contentItem: Text {
-                                text: "▲"
-                                color: "white"
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                            // Кнопка переворота кадра на 90°
+                            Button {
+                                id: rotateButton
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: "↻"
+                                    color: "white"
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: rotateButton.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onClicked: {
+                                    vlcPlayer.angle = (vlcPlayer.angle + 90) % 360
+                                    cameraManager.saveUiAngle(cameraCell.currentIp, vlcPlayer.angle)
+                                }
                             }
-                            background: Rectangle {
-                                radius: 4
-                                color: btnUp.pressed ? "#aa000000" : "#66000000"
-                                border.color: "#88ffffff"
-                                border.width: 1
-                            }
-                            onPressed: cameraManager.ptzMove(index, 0.0, controlBar.ptzSpeed)
-                            onReleased: cameraManager.ptzStop(index)
-                            onCanceled: cameraManager.ptzStop(index)
-                        }
 
-                        // ВНИЗ
-                        Button {
-                            id: btnDown
-                            width: 28
-                            height: 28
-                            padding: 0
-                            contentItem: Text {
-                                text: "▼"
-                                color: "white"
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                            // ВЛЕВО
+                            Button {
+                                id: btnLeft
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: "◄"
+                                    color: "white"
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: btnLeft.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onPressed: cameraManager.ptzMove(index, controlBar.ptzSpeed, 0.0)
+                                onReleased: cameraManager.ptzStop(index)
+                                onCanceled: cameraManager.ptzStop(index)
                             }
-                            background: Rectangle {
-                                radius: 4
-                                color: btnDown.pressed ? "#aa000000" : "#66000000"
-                                border.color: "#88ffffff"
-                                border.width: 1
-                            }
-                            onPressed: cameraManager.ptzMove(index, 0.0, -controlBar.ptzSpeed)
-                            onReleased: cameraManager.ptzStop(index)
-                            onCanceled: cameraManager.ptzStop(index)
-                        }
 
-                        // ВПРАВО
-                        Button {
-                            id: btnRight
-                            width: 28
-                            height: 28
-                            padding: 0
-                            contentItem: Text {
-                                text: "►"
-                                color: "white"
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
+                            // ВВЕРХ
+                            Button {
+                                id: btnUp
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: "▲"
+                                    color: "white"
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: btnUp.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onPressed: cameraManager.ptzMove(index, 0.0, controlBar.ptzSpeed)
+                                onReleased: cameraManager.ptzStop(index)
+                                onCanceled: cameraManager.ptzStop(index)
                             }
-                            background: Rectangle {
-                                radius: 4
-                                color: btnRight.pressed ? "#aa000000" : "#66000000"
-                                border.color: "#88ffffff"
-                                border.width: 1
+
+                            // ВНИЗ
+                            Button {
+                                id: btnDown
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: "▼"
+                                    color: "white"
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: btnDown.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onPressed: cameraManager.ptzMove(index, 0.0, -controlBar.ptzSpeed)
+                                onReleased: cameraManager.ptzStop(index)
+                                onCanceled: cameraManager.ptzStop(index)
                             }
-                            onPressed: cameraManager.ptzMove(index, -controlBar.ptzSpeed, 0.0)
-                            onReleased: cameraManager.ptzStop(index)
-                            onCanceled: cameraManager.ptzStop(index)
+
+                            // ВПРАВО
+                            Button {
+                                id: btnRight
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: "►"
+                                    color: "white"
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: btnRight.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onPressed: cameraManager.ptzMove(index, -controlBar.ptzSpeed, 0.0)
+                                onReleased: cameraManager.ptzStop(index)
+                                onCanceled: cameraManager.ptzStop(index)
+                            }
+
+                            Button {
+                                id: expandButton
+                                width: 28
+                                height: 28
+                                padding: 0
+                                contentItem: Text {
+                                    text: root.expandedSlot === index ? "−" : "⛶"
+                                    color: "white"
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: expandButton.pressed ? "#aa000000" : "#66000000"
+                                    border.color: "#88ffffff"
+                                    border.width: 1
+                                }
+                                onClicked: root.expandedSlot = (root.expandedSlot === index) ? -1 : index
+                            }
                         }
                     }
                 }
@@ -247,6 +287,7 @@ Window {
                         rect.mediaPlayer.stop()
                     }
                 }
+                root.expandedSlot = -1
             }
         }
 
@@ -258,6 +299,7 @@ Window {
             Layout.preferredWidth: 220
             Layout.fillHeight: true
             spacing: 10
+            visible: root.expandedSlot === -1
 
             Rectangle {
                 Layout.fillWidth: true
