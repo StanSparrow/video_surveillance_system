@@ -73,6 +73,7 @@ private:
 	qint64 m_durationMs = 0;
 	bool m_isPlaying = false;
 	bool m_isSeekable = false;
+	bool m_isPaused = false;
 };
 
 #endif // VLCVIDEOITEM_H

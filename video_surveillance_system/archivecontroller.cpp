@@ -123,7 +123,7 @@ void ArchiveController::ensureReplayServer()
 				}
 			}
 
-			QTcpSocket *camSock = new QTcpSocket(vlcSock);
+			QTcpSocket *camSock = new QTcpSocket(this);
 			auto rxBuf = std::make_shared<QByteArray>();
 			auto mediaBuf = std::make_shared<QByteArray>();
 			auto sid = std::make_shared<uint32_t>(0);
@@ -219,8 +219,32 @@ void ArchiveController::ensureReplayServer()
 				}
 			});
 
-			connect(vlcSock, &QTcpSocket::disconnected, camSock, &QTcpSocket::deleteLater);
+			connect(vlcSock, &QTcpSocket::disconnected, this, [camSock, sid, sidStr, fileName, startTime, endTime]() {
+			if (camSock->state() == QAbstractSocket::ConnectedState && *sid != 0) {
+				QJsonObject stopObj{
+					{"Name", "OPPlayBack"},
+					{"SessionID", *sidStr},
+					{"OPPlayBack", QJsonObject{
+						{"Action", "Stop"},
+						{"StartTime", startTime},
+						{"EndTime", endTime},
+						{"Parameter", QJsonObject{
+							{"FileName", fileName},
+							{"PlayMode", "ByName"},
+							{"StreamType", 0},
+							{"TransMode", "TCP"},
+							{"Value", 0}
+						}}
+					}}
+				};
+				camSock->write(buildDvripPacket(1420, *sid, 3, stopObj));
+				camSock->flush();
+			}
+			camSock->disconnectFromHost();
+			camSock->deleteLater();
+			});
 			connect(vlcSock, &QTcpSocket::disconnected, vlcSock, &QTcpSocket::deleteLater);
+
 			camSock->connectToHost(m_ip, 34567);
 		});
 	});

@@ -18,9 +18,24 @@ Window {
     property string baseReplayUrl: ""
     property int fallbackDurationMs: 0
     property int streamOffsetMs: 0
+    property int elapsedPlayMs: 0
 
+    readonly property int currentStreamPosMs: archivePlayer.positionMs > 0 ? archivePlayer.positionMs : elapsedPlayMs
     readonly property int effectiveDurationMs: archivePlayer.durationMs > 0 ? archivePlayer.durationMs : fallbackDurationMs
-    readonly property int effectivePositionMs: Math.min(effectiveDurationMs > 0 ? effectiveDurationMs : 999999999, streamOffsetMs + archivePlayer.positionMs)
+    readonly property int effectivePositionMs: Math.min(effectiveDurationMs > 0 ? effectiveDurationMs : 999999999, streamOffsetMs + currentStreamPosMs)
+
+    Timer {
+        interval: 250
+        repeat: true
+        running: archivePlayer.isPlaying && !timelineSlider.pressed
+        onTriggered: {
+            if (archivePlayer.positionMs <= 0) {
+                if (archiveWindow.effectiveDurationMs <= 0 || archiveWindow.streamOffsetMs + archiveWindow.elapsedPlayMs < archiveWindow.effectiveDurationMs) {
+                    archiveWindow.elapsedPlayMs += 250
+                }
+            }
+        }
+    }
 
     function formatTime(ms) {
         var totalSec = Math.max(0, Math.floor(ms / 1000))
@@ -36,6 +51,7 @@ Window {
         baseReplayUrl = item.replayUrl
         fallbackDurationMs = item.durationMs || 0
         streamOffsetMs = 0
+        elapsedPlayMs = 0
 
         archivePlayer.stop()
         archivePlayer.source = baseReplayUrl
@@ -51,6 +67,7 @@ Window {
         } else {
             var offsetSec = Math.floor(clampedMs / 1000)
             streamOffsetMs = offsetSec * 1000
+            elapsedPlayMs = 0
             archivePlayer.stop()
             archivePlayer.source = baseReplayUrl + "&offset=" + offsetSec
             archivePlayer.play()
@@ -185,6 +202,7 @@ Window {
                             onClicked: {
                                 archivePlayer.stop()
                                 archiveWindow.streamOffsetMs = 0
+                                elapsedPlayMs = 0
                             }
                         }
 

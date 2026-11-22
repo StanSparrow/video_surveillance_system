@@ -20,7 +20,7 @@ VlcVideoItem::VlcVideoItem(QQuickItem *parent) : QQuickItem(parent)
 
 		m_positionMs = (pos > 0) ? pos : 0;
 		m_durationMs = (len > 0) ? len : 0;
-		m_isPlaying = playing;
+		m_isPlaying = m_isPaused ? false : playing;
 		m_isSeekable = seekable;
 		emit playbackStateChanged();
 	});
@@ -116,6 +116,7 @@ void VlcVideoItem::stopVlc()
 	m_positionMs = 0;
 	m_durationMs = 0;
 	m_isPlaying = false;
+	m_isPaused = false;
 	m_isSeekable = false;
 	emit playbackStateChanged();
 
@@ -152,22 +153,13 @@ void* VlcVideoItem::lockCallback(void *opaque, void **planes)
 
 void VlcVideoItem::unlockCallback(void *opaque, void *picture, void *const *planes)
 {
-	/*VlcVideoItem *item = static_cast<VlcVideoItem*>(opaque);
-	Q_UNUSED(picture);
-	Q_UNUSED(planes);
-
-	// Из сырого буфера конструируем QImage (без копирования памяти)
-	item->m_currentImage = QImage(
-		reinterpret_cast<const uchar*>(item->m_pixelBuffer.constData()),
-		item->m_videoWidth,
-		item->m_videoHeight,
-		QImage::Format_RGBA8888
-	);
-
-	item->m_frameReady = true;
-	item->m_mutex.unlock();*/
-
 	VlcVideoItem *item = static_cast<VlcVideoItem*>(opaque);
+
+	if (item->m_isPaused) {
+		item->m_mutex.unlock();
+		return;
+	}
+
 	Q_UNUSED(picture);
 	Q_UNUSED(planes);
 
@@ -233,8 +225,9 @@ QSGNode* VlcVideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 void VlcVideoItem::togglePause()
 {
 	if (!m_vlcPlayer) return;
-	libvlc_media_player_pause(m_vlcPlayer);
-	m_isPlaying = (libvlc_media_player_is_playing(m_vlcPlayer) == 1);
+	m_isPaused = !m_isPaused;
+	libvlc_media_player_set_pause(m_vlcPlayer, m_isPaused ? 1 : 0);
+	m_isPlaying = !m_isPaused;
 	emit playbackStateChanged();
 }
 
