@@ -8,6 +8,22 @@ VlcVideoItem::VlcVideoItem(QQuickItem *parent) : QQuickItem(parent)
 	// Говорим QML, что этот элемент сам себя рисует
 	setFlag(ItemHasContents, true);
 	initVlc();
+
+	m_stateTimer = new QTimer(this);
+	m_stateTimer->setInterval(250);
+	connect(m_stateTimer, &QTimer::timeout, this, [this]() {
+		if (!m_vlcPlayer) return;
+		qint64 pos = libvlc_media_player_get_time(m_vlcPlayer);
+		qint64 len = libvlc_media_player_get_length(m_vlcPlayer);
+		bool playing = (libvlc_media_player_is_playing(m_vlcPlayer) == 1);
+		bool seekable = (libvlc_media_player_is_seekable(m_vlcPlayer) == 1);
+
+		m_positionMs = (pos > 0) ? pos : 0;
+		m_durationMs = (len > 0) ? len : 0;
+		m_isPlaying = playing;
+		m_isSeekable = seekable;
+		emit playbackStateChanged();
+	});
 }
 
 VlcVideoItem::~VlcVideoItem()
@@ -81,6 +97,8 @@ void VlcVideoItem::play()
 
 	libvlc_media_player_play(m_vlcPlayer);
 	//libvlc_audio_set_mute(m_vlcPlayer, 1);
+
+	m_stateTimer->start();
 }
 
 
@@ -94,6 +112,13 @@ void VlcVideoItem::stop()
 
 void VlcVideoItem::stopVlc()
 {
+	if (m_stateTimer) m_stateTimer->stop();
+	m_positionMs = 0;
+	m_durationMs = 0;
+	m_isPlaying = false;
+	m_isSeekable = false;
+	emit playbackStateChanged();
+
 	libvlc_media_player_t *playerToStop = nullptr;
 
 	m_mutex.lock();
@@ -203,6 +228,27 @@ QSGNode* VlcVideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 		}
 	}
 	return node;
+}
+
+void VlcVideoItem::togglePause()
+{
+	if (!m_vlcPlayer) return;
+	libvlc_media_player_pause(m_vlcPlayer);
+	m_isPlaying = (libvlc_media_player_is_playing(m_vlcPlayer) == 1);
+	emit playbackStateChanged();
+}
+
+void VlcVideoItem::seekTo(qint64 ms)
+{
+	if (!m_vlcPlayer || !m_isSeekable) return;
+	libvlc_media_player_set_time(m_vlcPlayer, qMax<qint64>(0, ms));
+	m_positionMs = qMax<qint64>(0, ms);
+	emit playbackStateChanged();
+}
+
+void VlcVideoItem::seekRelative(qint64 deltaMs)
+{
+	seekTo(m_positionMs + deltaMs);
 }
 
 

@@ -8,10 +8,10 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QVariantList>
-#include <QTcpServer>
 
 #include "onvifptzcontroller.h"
 
+class ArchiveController;
 class Camera : public QObject
 {
 	Q_OBJECT
@@ -41,11 +41,7 @@ private:
 	QNetworkAccessManager *m_networkManager;
 	OnvifPtzController *m_ptzController = nullptr;
 	QString m_profileToken;
-	QTcpServer *m_replayServer = nullptr;
-	QString m_dvripUser = "admin";
-	QString m_dvripPass = "";
-	QString m_dvripAuthPass = "";
-	QString m_dvripAuthEnc = "MD5";
+	ArchiveController *m_archiveController = nullptr;
 };
 
 #endif // CAMERA_H

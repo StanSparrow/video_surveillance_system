@@ -272,11 +272,10 @@ Window {
                                     archiveWindow.slotIndex = index
                                     archiveWindow.cameraIp = cameraCell.currentIp
                                     archiveWindow.recordingsModel = []
-                                    userInput.text = cameraManager.loadCameraUser(cameraCell.currentIp)
-                                    passInput.text = cameraManager.loadCameraPassword(cameraCell.currentIp)
+                                    archiveWindow.currentIndex = -1
                                     archiveWindow.show()
                                     archiveWindow.raise()
-                                    cameraManager.requestRecordings(index, archiveWindow.selectedDate, userInput.text, passInput.text)
+                                    archiveWindow.loadCredentialsAndFetch()
                                 }
                             }
                         }
@@ -415,115 +414,7 @@ Window {
         }
     }
 
-    Window {
+    ArchiveWindow {
         id: archiveWindow
-        width: 760
-        height: 500
-        title: "Архив камеры: " + cameraIp
-
-        property int slotIndex: -1
-        property string cameraIp: ""
-        property string selectedDate: Qt.formatDate(new Date(), "yyyy-MM-dd")
-        property var recordingsModel: []
-
-        onClosing: archivePlayer.stop()
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: 10
-            spacing: 10
-
-            // Левая часть: плеер архива
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: 6
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: "black"
-                    clip: true
-
-                    VlcVideoPlayer {
-                        id: archivePlayer
-                        anchors.fill: parent
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        color: "white"
-                        text: "Выберите запись из списка справа"
-                        visible: archivePlayer.source === ""
-                    }
-                }
-
-                Row {
-                    spacing: 8
-                    Layout.alignment: Qt.AlignHCenter
-
-                    Button {
-                        text: "Стоп"
-                        onClicked: archivePlayer.stop()
-                    }
-                }
-            }
-
-            // Правая часть: дата и список роликов с флешки
-            ColumnLayout {
-                Layout.preferredWidth: 230
-                Layout.fillHeight: true
-                spacing: 8
-
-                TextField {
-                    id: userInput
-                    Layout.fillWidth: true
-                    placeholderText: "Имя пользователя (из приложения)"
-                    text: cameraManager.loadCameraUser(archiveWindow.cameraIp)
-                }
-
-                TextField {
-                    id: passInput
-                    Layout.fillWidth: true
-                    echoMode: TextInput.Password
-                    placeholderText: "Пароль устройства"
-                    text: cameraManager.loadCameraPassword(archiveWindow.cameraIp)
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    TextField {
-                        id: dateInput
-                        Layout.fillWidth: true
-                        text: archiveWindow.selectedDate
-                        placeholderText: "ГГГГ-ММ-ДД"
-                    }
-                    Button {
-                        text: "Найти"
-                        onClicked: {
-                            archiveWindow.selectedDate = dateInput.text
-                            cameraManager.requestRecordings(archiveWindow.slotIndex, archiveWindow.selectedDate, userInput.text, passInput.text)
-                        }
-                    }
-                }
-
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    model: archiveWindow.recordingsModel
-
-                    delegate: ItemDelegate {
-                        width: parent.width
-                        text: modelData.title // например: "14:00:00 - 14:15:00"
-                        onClicked: {
-                            archivePlayer.stop()
-                            archivePlayer.source = modelData.replayUrl
-                            archivePlayer.play()
-                        }
-                    }
-                }
-            }
-        }
     }
 }
