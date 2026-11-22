@@ -98,15 +98,16 @@ Window {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 84
+                Layout.preferredHeight: controlsCol.implicitHeight + 16
                 color: "#1e1e1e"
                 border.color: "#333333"
                 border.width: 1
 
                 ColumnLayout {
+                    id: controlsCol
                     anchors.fill: parent
                     anchors.margins: 8
-                    spacing: 4
+                    spacing: 6
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -143,22 +144,28 @@ Window {
                     }
 
                     RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 8
+                        Layout.fillWidth: true
+                        spacing: 4
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: "⏮ Пред."
                             enabled: archiveWindow.currentIndex > 0
                             onClicked: archiveWindow.openRecord(archiveWindow.currentIndex - 1)
                         }
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: "⏪ -10с"
                             enabled: archivePlayer.source !== ""
                             onClicked: archiveWindow.seekArchive(archiveWindow.effectivePositionMs - 10000)
                         }
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: archivePlayer.isPlaying ? "⏸ Пауза" : "▶ Пуск"
                             enabled: archivePlayer.source !== "" || archiveWindow.currentIndex >= 0
                             onClicked: {
@@ -171,6 +178,8 @@ Window {
                         }
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: "⏹ Стоп"
                             enabled: archivePlayer.source !== ""
                             onClicked: {
@@ -180,12 +189,16 @@ Window {
                         }
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: "+10с ⏩"
                             enabled: archivePlayer.source !== ""
                             onClicked: archiveWindow.seekArchive(archiveWindow.effectivePositionMs + 10000)
                         }
 
                         Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
                             text: "След. ⏭"
                             enabled: archiveWindow.currentIndex >= 0 && archiveWindow.currentIndex < archiveWindow.recordingsModel.length - 1
                             onClicked: archiveWindow.openRecord(archiveWindow.currentIndex + 1)
