@@ -45,7 +45,7 @@
 ## Сборка и запуск
 
 ### Требования
-* **Qt 5.12+** (модули: `core`, `gui`, `qml`, `quick`, `network`, `widgets`)
+* **Qt 6.11.2+** (модули: `core`, `gui`, `qml`, `quick`, `network`, `widgets`)
 * **Компилятор**: MinGW 64-bit (или MSVC / GCC с поддержкой C++11)
 * **LibVLC SDK** (проверено на версии `3.0.24`)
 
