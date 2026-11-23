@@ -65,3 +65,5 @@ QMAKE_LFLAGS += -fstack-protector-strong
 
 QMAKE_CXXFLAGS -= -std=gnu++17 -std=c++17
 QMAKE_CXXFLAGS += -std=gnu++23
+
+QMAKE_CXXFLAGS += -isystem $$[QT_INSTALL_HEADERS]
