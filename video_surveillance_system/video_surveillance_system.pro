@@ -2,7 +2,7 @@ QT += core gui qml quick network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++11
+CONFIG += c++23
 CONFIG -= debug_and_release
 
 # You can make your code fail to compile if it uses deprecated APIs.
