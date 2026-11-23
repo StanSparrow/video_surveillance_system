@@ -369,7 +369,7 @@ void ArchiveController::fetchRecordings(const QString &dateStr)
 			}
 		});
 
-		connect(querySock, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error),
+        connect(querySock, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
 				this, [querySock, loggedIn, tryNextLogin](QAbstractSocket::SocketError) {
 			querySock->deleteLater();
 			if (!*loggedIn) (*tryNextLogin)();
