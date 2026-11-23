@@ -14,6 +14,7 @@
 int main(int argc, char *argv[]) {
 
 qDebug() << "C++ standard:" << __cplusplus;
+qDebug() << "GCC version:" << __VERSION__;
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

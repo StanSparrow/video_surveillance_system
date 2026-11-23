@@ -61,4 +61,7 @@ QMAKE_POST_LINK += $$escape_expand(\n\t) xcopy /E /I /Y "$$shell_path($$VLC_DIR/
 }
 
 QMAKE_CXXFLAGS += -fstack-protector-strong
-QMAKE_LFLAGS += -fstack-protector-strong -lssp
+QMAKE_LFLAGS += -fstack-protector-strong
+
+QMAKE_CXXFLAGS -= -std=gnu++17 -std=c++17
+QMAKE_CXXFLAGS += -std=gnu++23
