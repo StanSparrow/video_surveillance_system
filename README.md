@@ -27,17 +27,19 @@
 ## Структура проекта
 
 ```text
-├── main.cpp                   # Точка входа, регистрация QML-типов и контекста
-├── main.qml                   # Главное окно: сетка 2×2, список найденных камер, PTZ-панель
-├── ArchiveWindow.qml          # Окно просмотра архива с таймлайном и панелью управления
-├── camerascanner.h/.cpp       # Поиск камер в сети (UDP Multicast WS-Discovery)
-├── cameramanager.h/.cpp       # Управление пулом активных камер и связью с QML
-├── camera.h/.cpp              # Подключение к камере по ONVIF (GetProfiles, GetStreamUri)
-├── onvifptzcontroller.h/.cpp  # Управление PTZ-приводом и пресетами через SOAP
-├── archivecontroller.h/.cpp   # Авторизация DVRIP, запрос списка файлов и стрим-мост для VLC
-├── vlcvideoitem.h/.cpp        # Кастомный QQuickItem для отрисовки кадров LibVLC в SceneGraph
-├── settingsmanager.h/.cpp     # Чтение и запись настроек камер в JSON
-└── video_surveillance_system.pro
+├── main.cpp                      # Точка входа, регистрация QML-типов и контекста
+├── main.qml                      # Главное окно: сетка 2×2, список найденных камер, PTZ-панель
+├── ArchiveWindow.qml             # Окно просмотра архива с таймлайном и панелью управления
+├── resources.qrc                 # Файл ресурсов Qt (упаковка QML-файлов)
+├── camerascanner.h/.cpp          # Поиск камер в сети (UDP Multicast WS-Discovery)
+├── cameramanager.h/.cpp          # Управление пулом активных камер и связью с QML
+├── camera.h/.cpp                 # Подключение к камере по ONVIF (GetProfiles, GetStreamUri)
+├── onvifptzcontroller.h/.cpp     # Управление PTZ-приводом и пресетами через SOAP
+├── archivecontroller.h/.cpp      # Авторизация DVRIP, запрос списка файлов и стрим-мост для VLC
+├── vlcvideoitem.h/.cpp           # Кастомный QQuickItem для отрисовки кадров LibVLC в SceneGraph
+├── settingsmanager.h/.cpp        # Чтение и запись настроек камер в JSON
+├── mainwindow.h/.cpp/.ui         # Шаблон окна QWidgets (не используется в сборке)
+└── video_surveillance_system.pro # Файл конфигурации сборки qmake
 ```
 
 ---
