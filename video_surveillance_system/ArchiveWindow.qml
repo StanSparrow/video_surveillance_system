@@ -265,18 +265,26 @@ Window {
             }
 
             ListView {
+                id: recordingsListView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                boundsBehavior: Flickable.StopAtBounds
                 model: archiveWindow.recordingsModel
 
+                ScrollBar.vertical: ScrollBar {
+                    id: vScrollBar
+                    policy: ScrollBar.AlwaysOn
+                }
+
                 delegate: ItemDelegate {
-                    width: parent.width
+                    width: recordingsListView.width - vScrollBar.width
                     highlighted: index === archiveWindow.currentIndex
                     text: modelData.title
                     onClicked: archiveWindow.openRecord(index)
                 }
             }
+
         }
     }
 }
